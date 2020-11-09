@@ -41,13 +41,14 @@ class RunManager(models.Manager):
         # of the associated instances, so in order to compare configurations
         # with model instances, we convert the value to primary key.
         for key, value in kwargs.items():
-            if isinstance(value, models.Model):
+            input_definition = analysis_version.input_definitions.get(key=key)
+            if input_definition.db_value_preprocessing:
+                kwargs[key] = input_definition.get_db_value(value)
+            elif isinstance(value, models.Model):
                 kwargs[key] = value.id
-
         # Update with the analysis version's input specification deafults in
         # order to compare the full configuration.
         configuration = analysis_version.update_input_with_defaults(**kwargs)
-
         # Find a matching run instance (only one should exist) and return it
         # or None.
         matching = [
@@ -78,13 +79,21 @@ class RunManager(models.Manager):
         run = self.create(analysis_version=analysis_version, user=user)
         input_manager = InputManager(run=run, configuration=kwargs)
         inputs = input_manager.fix_input()
-        results = analysis_version.run(**inputs)
+        try:
+            results = analysis_version.run(**inputs)
+        except KeyboardInterrupt:
+            run.delete()
+            return
         output_manager = OutputManager(run=run, results=results)
         output_manager.create_output_instances()
         return run
 
     def get_or_execute(
-        self, analysis_version: AnalysisVersion, user: User = None, **kwargs
+        self,
+        analysis_version: AnalysisVersion,
+        user: User = None,
+        return_created: bool = False,
+        **kwargs
     ):
         """
         Get or execute a run of *analysis_version* with the provided keyword
@@ -96,6 +105,9 @@ class RunManager(models.Manager):
             AnalysisVersion to retrieve or execute
         user : User, optional
             User who executed the run, by default None, by default None
+        return_created : bool
+            Whether to also return a boolean indicating if the run already
+            existed in the database or created, defaults to False
 
         Returns
         -------
@@ -104,6 +116,8 @@ class RunManager(models.Manager):
         """
 
         existing = self.get_existing(analysis_version, **kwargs)
-        return existing or self.create_and_execute(
-            analysis_version, user, **kwargs
-        )
+        if existing:
+            return (existing, False) if return_created else existing
+        else:
+            run = self.create_and_execute(analysis_version, user, **kwargs)
+            return (run, True) if return_created else run

@@ -1,13 +1,13 @@
-from django.conf import settings
 from django.db import models
 from django_analyses.models.output.output import Output
 from django_analyses.models.output.types.output_types import OutputTypes
+from django_analyses.models.utils.get_media_root import get_media_root
 from pathlib import Path
 
 
 class FileOutput(Output):
     value = models.FilePathField(
-        settings.MEDIA_ROOT, max_length=1000, blank=True, null=True
+        path=get_media_root(), max_length=1000, blank=True, null=True
     )
     definition = models.ForeignKey(
         "django_analyses.FileOutputDefinition",
@@ -19,12 +19,15 @@ class FileOutput(Output):
         return OutputTypes.FIL
 
     def raise_missing_output_error(self) -> None:
-        raise FileNotFoundError(f"{self.key} could not be found in {self.value}!")
+        raise FileNotFoundError(
+            f"{self.key} could not be found in {self.value}!"
+        )
 
     def validate(self) -> None:
-        file_exists = Path(self.value).is_file()
-        if self.definition.validate_existence and not file_exists:
-            self.raise_missing_output_error()
+        if self.value:
+            file_exists = Path(self.value).is_file()
+            if self.definition.validate_existence and not file_exists:
+                self.raise_missing_output_error()
         return super().validate()
 
     def pre_save(self) -> None:

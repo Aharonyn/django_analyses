@@ -1,6 +1,5 @@
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.contrib.postgres.fields import JSONField
 from django_analyses.models.output.output import Output
 from django_analyses.models.output.types.output_types import OutputTypes
 from django_analyses.models.input.utils import ListElementTypes, TYPES_DICT
@@ -8,7 +7,7 @@ from pathlib import Path
 
 
 class ListOutput(Output):
-    value = JSONField()
+    value = models.JSONField()
     definition = models.ForeignKey(
         "django_analyses.ListOutputDefinition",
         on_delete=models.PROTECT,
@@ -22,10 +21,12 @@ class ListOutput(Output):
         return all([type(element) is expected_type for element in value])
 
     def raise_not_list_error(self) -> None:
-        raise ValidationError("ListInput value must be a list instance!")
+        raise ValidationError("ListOutput value must be a list instance!")
 
     def raise_incorrect_type_error(self) -> None:
-        raise ValidationError(f"List elements must be of type {self.expected_type}!")
+        raise ValidationError(
+            f"List elements must be of type {self.expected_type}!"
+        )
 
     def validate(self) -> None:
         if not isinstance(self.value, list):
